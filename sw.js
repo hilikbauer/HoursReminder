@@ -1,5 +1,5 @@
 // Offline cache and notification handling for the Hours app.
-var CACHE = "hours-v1";
+var CACHE = "hours-v2";
 var SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {
