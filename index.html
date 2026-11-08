@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>שעות</title>
+<meta name="theme-color" content="#0d0e10">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="שעות">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Manrope:wght@200;300;400;500&display=swap">
+<style>
+  /* Layout: one narrow column of seven hairline rows, quiet tools beneath; a bottom sheet with typed entry and two scroll wheels; a full-screen alert that shows the due number. */
+  :root {
+    color-scheme: dark;
+    --bg: #0d0e10;
+    --sheet: #151618;
+    --fg: #ecebe6;
+    --muted: #6c6d70;
+    --line: #25272a;
+    --accent: #c8b27f;
+    --font-index: "Cormorant Garamond", "Frank Ruhl Libre", Georgia, serif;
+    --font-time: "Manrope", "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --item: 48px;
+  }
+
+  html { height: 100%; background: var(--bg); }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-time);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 28px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    place-items: center;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .wrap {
+    width: min(100%, 520px);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+  }
+  .list li { border-bottom: 1px solid var(--line); }
+
+  .row {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 20px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+  .index {
+    font-family: var(--font-index);
+    font-weight: 300;
+    font-size: 44px;
+    line-height: 1;
+    color: var(--muted);
+    min-width: 1.2em;
+    transition: color .25s ease;
+  }
+  .time {
+    direction: ltr;
+    font-weight: 200;
+    font-size: clamp(40px, 11vw, 56px);
+    line-height: 1.1;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (hover: hover) { .row:hover .index { color: var(--accent); } }
+  .row:active .index { color: var(--accent); }
+
+  /* Tools */
+  .tools { display: flex; gap: 12px; flex-wrap: wrap; }
+  .tool {
+    all: unset;
+    box-sizing: border-box;
+    flex: 1 1 140px;
+    min-height: 48px;
+    display: grid;
+    place-items: center;
+    padding-inline: 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-family: var(--font-time);
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: .06em;
+    color: var(--muted);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: color .25s ease, border-color .25s ease;
+  }
+  .tool:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .tool[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  @media (hover: hover) { .tool:hover { color: var(--fg); } }
+  .note {
+    margin: 0;
+    min-height: 1.4em;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+    text-wrap: balance;
+  }
+
+  /* Bottom sheet */
+  .layer {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear .3s;
+  }
+  .layer.open { visibility: visible; pointer-events: auto; transition-delay: 0s; }
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .55);
+    opacity: 0;
+    transition: opacity .3s ease;
+  }
+  .layer.open .backdrop { opacity: 1; }
+
+  .sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin-inline: auto;
+    width: min(100%, 520px);
+    background: var(--sheet);
+    border-top: 1px solid var(--line);
+    border-radius: 20px 20px 0 0;
+    padding-top: 14px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(100%);
+    transition: transform .32s cubic-bezier(.2, .8, .2, 1);
+  }
+  .layer.open .sheet { transform: translateY(0); }
+
+  .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; }
+  .caption {
+    text-align: center;
+    font-size: 13px;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin: 0 0 2px;
+  }
+  .manual {
+    all: unset;
+    box-sizing: border-box;
+    display: block;
+    width: 7.4ch;
+    margin: 0 auto 4px;
+    direction: ltr;
+    text-align: center;
+    font-family: var(--font-time);
+    font-weight: 200;
+    font-size: 40px;
+    line-height: 1.2;
+    letter-spacing: .04em;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg);
+    caret-color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 4px;
+    transition: border-color .25s ease;
+  }
+  .manual::placeholder { color: var(--muted); }
+  .manual:focus { border-bottom-color: var(--accent); }
+
+  .wheels {
+    position: relative;
+    direction: ltr;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+  }
+  .wheel {
+    width: 92px;
+    height: calc(var(--item) * 5);
+    overflow-y: auto;
+    padding-block: calc(var(--item) * 2);
+    box-sizing: border-box;
+    scroll-snap-type: y mandatory;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent);
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .item {
+    height: var(--item);
+    display: grid;
+    place-items: center;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    font-weight: 200;
+    font-size: 36px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    will-change: transform, opacity;
+  }
+  .colon {
+    align-self: flex-start;
+    margin-top: calc(var(--item) * 2);
+    height: var(--item);
+    display: grid;
+    place-items: center;
+    font-weight: 200;
+    font-size: 36px;
+    color: var(--muted);
+    padding-bottom: 4px;
+  }
+  .band {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--item) * 2);
+    height: var(--item);
+    width: min(88%, 260px);
+    transform: translateX(-50%);
+    border-block: 1px solid var(--accent);
+    opacity: .55;
+    pointer-events: none;
+  }
+  .actions { display: flex; border-top: 1px solid var(--line); margin-top: 6px; }
+  .actions button {
+    all: unset;
+    box-sizing: border-box;
+    flex: 1;
+    min-height: 56px;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-time);
+    font-size: 16px;
+    letter-spacing: .04em;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .actions button:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
+  .actions .cancel { color: var(--muted); border-inline-end: 1px solid var(--line); }
+  .actions .ok { color: var(--accent); font-weight: 500; }
+
+  /* Reminder alert */
+  .alert {
+    all: unset;
+    box-sizing: border-box;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: var(--bg);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    text-align: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .3s ease, visibility 0s linear .3s;
+    cursor: pointer;
+    padding: env(safe-area-inset-top, 0px) 16px env(safe-area-inset-bottom, 0px);
+  }
+  .alert.open { visibility: visible; opacity: 1; transition-delay: 0s; }
+  .alert-num {
+    font-family: var(--font-index);
+    font-weight: 300;
+    font-size: clamp(140px, 42vh, 380px);
+    line-height: 1;
+    color: var(--accent);
+  }
+  .alert-num.multi { font-size: clamp(80px, 22vh, 200px); letter-spacing: .1em; }
+  .alert-time {
+    direction: ltr;
+    font-weight: 200;
+    font-size: clamp(36px, 9vw, 56px);
+    letter-spacing: .04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .alert-hint { font-size: 13px; letter-spacing: .08em; color: var(--muted); margin: 24px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .index, .tool, .backdrop, .sheet, .layer, .alert, .manual { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <ul class="list" id="list" aria-label="רשימת שעות"></ul>
+  <div class="tools">
+    <button type="button" class="tool" id="remind" aria-pressed="false">תזכורות כבויות</button>
+    <button type="button" class="tool" id="export">ייצוא ליומן</button>
+  </div>
+  <p class="note" id="note" role="status"></p>
+</main>
+
+<div class="layer" id="layer">
+  <div class="backdrop" id="backdrop"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="caption">
+    <div class="grip"></div>
+    <p class="caption" id="caption">שורה 2</p>
+    <input class="manual" id="manual" type="text" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="00:00" aria-label="הקלדת שעה ידנית">
+    <div class="wheels">
+      <div class="wheel" id="wheel-h" role="listbox" aria-label="שעות" tabindex="0"></div>
+      <div class="colon" aria-hidden="true">:</div>
+      <div class="wheel" id="wheel-m" role="listbox" aria-label="דקות" tabindex="0"></div>
+      <div class="band"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="cancel" id="cancel">ביטול</button>
+      <button type="button" class="ok" id="ok">אישור</button>
+    </div>
+  </div>
+</div>
+
+<button type="button" class="alert" id="alert" aria-label="תזכורת. לחצו לסגירה">
+  <span class="alert-num" id="alert-num"></span>
+  <span class="alert-time" id="alert-time"></span>
+  <span class="alert-hint">לחצו לסגירה</span>
+</button>
+
+<script>
+  var STORE_KEY = "hours-list-v1";
+  var SETTINGS_KEY = "hours-settings-v1";
+  var FIRED_KEY = "hours-fired-v1";
+  var DEFAULTS = ["07:00", "08:30", "10:15", "12:00", "14:45", "17:30", "21:00"];
+  var FIRST = 2;
+  var ITEM = 48;
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function valid(v) { return typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
+  function toMin(v) { var p = v.split(":"); return +p[0] * 60 + +p[1]; }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+
+  function readJSON(key) { try { var r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+  function writeJSON(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+
+  // Whatever was typed becomes a valid HH:MM, or null when nothing usable.
+  function normalize(text) {
+    var d = String(text).replace(/\D/g, "").slice(0, 4);
+    if (!d) return null;
+    var h, m;
+    if (d.length <= 2) { h = +d; m = 0; }
+    else if (d.length === 3) { h = +d[0]; m = +d.slice(1); }
+    else { h = +d.slice(0, 2); m = +d.slice(2); }
+    return pad(Math.min(h, 23)) + ":" + pad(Math.min(m, 59));
+  }
+
+  var stored = readJSON(STORE_KEY);
+  var values = (Array.isArray(stored) && stored.length === DEFAULTS.length && stored.every(valid)) ? stored : DEFAULTS.slice();
+  function saveValues() { writeJSON(STORE_KEY, values); }
+
+  var settings = readJSON(SETTINGS_KEY) || { remind: false };
+  function saveSettings() { writeJSON(SETTINGS_KEY, settings); }
+
+  /* ---------- Rows ---------- */
+  var list = document.getElementById("list");
+  var rowButtons = [];
+  var timeEls = [];
+
+  function rowLabel(i) { return "שורה " + (FIRST + i) + ", שעה " + values[i] + ". לחצו לשינוי"; }
+
+  values.forEach(function (value, i) {
+    var li = document.createElement("li");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "row";
+    btn.setAttribute("aria-label", rowLabel(i));
+
+    var idx = document.createElement("span");
+    idx.className = "index";
+    idx.textContent = String(FIRST + i);
+
+    var time = document.createElement("span");
+    time.className = "time";
+    time.textContent = value;
+
+    btn.appendChild(idx);
+    btn.appendChild(time);
+    btn.addEventListener("click", function () { openSheet(i); });
+    li.appendChild(btn);
+    list.appendChild(li);
+    rowButtons.push(btn);
+    timeEls.push(time);
+  });
+
+  /* ---------- Sheet: wheels + typed entry ---------- */
+  var layer = document.getElementById("layer");
+  var sheet = document.getElementById("sheet");
+  var wheelH = document.getElementById("wheel-h");
+  var wheelM = document.getElementById("wheel-m");
+  var manual = document.getElementById("manual");
+  var caption = document.getElementById("caption");
+  var current = 0;
+
+  function buildWheel(el, count) {
+    for (var i = 0; i < count; i++) {
+      var d = document.createElement("div");
+      d.className = "item";
+      d.setAttribute("role", "option");
+      d.textContent = pad(i);
+      (function (n) {
+        d.addEventListener("click", function () { el.scrollTo({ top: n * ITEM, behavior: "smooth" }); });
+      })(i);
+      el.appendChild(d);
+    }
+  }
+  buildWheel(wheelH, 24);
+  buildWheel(wheelM, 60);
+
+  function indexOf(el, count) {
+    return Math.max(0, Math.min(count - 1, Math.round(el.scrollTop / ITEM)));
+  }
+  function wheelsValue() { return pad(indexOf(wheelH, 24)) + ":" + pad(indexOf(wheelM, 60)); }
+
+  function paint(el) {
+    var pos = el.scrollTop / ITEM;
+    var kids = el.children;
+    for (var i = 0; i < kids.length; i++) {
+      var d = Math.abs(i - pos);
+      var k = kids[i];
+      if (d > 3) { k.style.opacity = "0"; continue; }
+      k.style.opacity = String(Math.max(0.15, 1 - d * 0.36));
+      k.style.transform = "scale(" + (1 - Math.min(d, 2.5) * 0.1).toFixed(3) + ")";
+      k.style.fontWeight = d < 0.5 ? "300" : "200";
+    }
+  }
+
+  function setWheels(v, behavior) {
+    var p = v.split(":");
+    wheelH.scrollTo({ top: +p[0] * ITEM, behavior: behavior });
+    wheelM.scrollTo({ top: +p[1] * ITEM, behavior: behavior });
+    paint(wheelH);
+    paint(wheelM);
+  }
+
+  function attach(el, count) {
+    var ticking = false;
+    var last = -1;
+    el.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        paint(el);
+        if (document.activeElement !== manual) manual.value = wheelsValue();
+        var n = indexOf(el, count);
+        if (n !== last) {
+          if (last !== -1) { try { if (navigator.vibrate) navigator.vibrate(4); } catch (e) {} }
+          last = n;
+        }
+      });
+    }, { passive: true });
+    el.addEventListener("touchstart", function () { if (document.activeElement === manual) manual.blur(); }, { passive: true });
+    el.addEventListener("pointerdown", function () { if (document.activeElement === manual) manual.blur(); });
+    el.addEventListener("keydown", function (e) {
+      var step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      var n = Math.max(0, Math.min(count - 1, indexOf(el, count) + step));
+      el.scrollTo({ top: n * ITEM, behavior: "smooth" });
+    });
+  }
+  attach(wheelH, 24);
+  attach(wheelM, 60);
+
+  manual.addEventListener("focus", function () { manual.select(); });
+  manual.addEventListener("input", function () {
+    var d = manual.value.replace(/\D/g, "").slice(0, 4);
+    manual.value = d.length > 2 ? d.slice(0, 2) + ":" + d.slice(2) : d;
+    if (d.length === 4 && +d.slice(0, 2) <= 23 && +d.slice(2) <= 59) {
+      setWheels(d.slice(0, 2) + ":" + d.slice(2), "instant");
+    }
+  });
+  manual.addEventListener("blur", function () {
+    var v = normalize(manual.value) || wheelsValue();
+    manual.value = v;
+    setWheels(v, "instant");
+  });
+  manual.addEventListener("keydown", function (e) { if (e.key === "Enter") manual.blur(); });
+
+  function openSheet(i) {
+    current = i;
+    caption.textContent = "שורה " + (FIRST + i);
+    manual.value = values[i];
+    layer.classList.add("open");
+    document.documentElement.style.overflow = "hidden";
+    requestAnimationFrame(function () {
+      setWheels(values[i], "instant");
+      document.getElementById("ok").focus({ preventScroll: true });
+    });
+  }
+  function closeSheet() {
+    if (document.activeElement === manual) manual.blur();
+    layer.classList.remove("open");
+    document.documentElement.style.overflow = "";
+    sheet.style.bottom = "";
+    if (rowButtons[current]) rowButtons[current].focus({ preventScroll: true });
+  }
+
+  document.getElementById("ok").addEventListener("click", function () {
+    var v = document.activeElement === manual ? (normalize(manual.value) || wheelsValue()) : wheelsValue();
+    values[current] = v;
+    timeEls[current].textContent = v;
+    rowButtons[current].setAttribute("aria-label", rowLabel(current));
+    saveValues();
+    // A time already behind us today does not fire when saved; the current minute does.
+    var now = new Date();
+    if (toMin(v) < now.getHours() * 60 + now.getMinutes()) markFired(current, v);
+    closeSheet();
+  });
+  document.getElementById("cancel").addEventListener("click", closeSheet);
+  document.getElementById("backdrop").addEventListener("click", closeSheet);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && layer.classList.contains("open")) closeSheet();
+  });
+
+  // Keep the sheet above the on-screen keyboard.
+  if (window.visualViewport) {
+    var lift = function () {
+      if (!layer.classList.contains("open")) return;
+      var vv = window.visualViewport;
+      var off = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      sheet.style.bottom = off + "px";
+    };
+    window.visualViewport.addEventListener("resize", lift);
+    window.visualViewport.addEventListener("scroll", lift);
+  }
+
+  paint(wheelH);
+  paint(wheelM);
+
+  /* ---------- Reminders ---------- */
+  var remindBtn = document.getElementById("remind");
+  var exportBtn = document.getElementById("export");
+  var note = document.getElementById("note");
+  var alertEl = document.getElementById("alert");
+  var alertNum = document.getElementById("alert-num");
+  var alertTime = document.getElementById("alert-time");
+
+  function firedState() {
+    var s = readJSON(FIRED_KEY);
+    if (!s || s.day !== today()) s = { day: today(), keys: {} };
+    return s;
+  }
+  function markFired(i, v) {
+    var s = firedState();
+    s.keys[i + "|" + v] = 1;
+    writeJSON(FIRED_KEY, s);
+  }
+
+  function canNotify() { return "Notification" in window && Notification.permission === "granted"; }
+
+  function refreshReminderUI() {
+    remindBtn.setAttribute("aria-pressed", settings.remind ? "true" : "false");
+    remindBtn.textContent = settings.remind ? "תזכורות פעילות" : "תזכורות כבויות";
+    if (!settings.remind) { note.textContent = ""; return; }
+    if (canNotify()) {
+      note.textContent = "התזכורת תקפוץ בשעה שנקבעה כל עוד האפליקציה פתוחה ברקע. לתזכורת שעובדת גם כשהטלפון נעול, ייצאו ליומן.";
+    } else {
+      note.textContent = "התראות מערכת לא מופעלות במכשיר הזה. המספר יופיע על המסך בשעה שנקבעה כל עוד האפליקציה פתוחה.";
+    }
+  }
+
+  remindBtn.addEventListener("click", function () {
+    settings.remind = !settings.remind;
+    saveSettings();
+    if (settings.remind && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().then(refreshReminderUI, refreshReminderUI);
+    }
+    refreshReminderUI();
+  });
+
+  function showAlert(nums, times) {
+    alertNum.textContent = nums.join("  ");
+    alertNum.className = "alert-num" + (nums.length > 1 ? " multi" : "");
+    alertTime.textContent = times.join("  ·  ");
+    alertEl.classList.add("open");
+    try { if (navigator.vibrate) navigator.vibrate([220, 120, 220, 120, 220]); } catch (e) {}
+  }
+  alertEl.addEventListener("click", function () { alertEl.classList.remove("open"); });
+
+  function systemNotify(nums, times) {
+    if (!canNotify()) return;
+    var opts = {
+      body: "השעה " + times.join(" · "),
+      tag: "hours-" + nums.join("-"),
+      renotify: true,
+      requireInteraction: true,
+      icon: "icon-192.png",
+      lang: "he",
+      dir: "rtl",
+      vibrate: [200, 100, 200, 100, 200]
+    };
+    var title = nums.join(" · ");
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (reg) reg.showNotification(title, opts);
+        else { try { new Notification(title, opts); } catch (e) {} }
+      }).catch(function () {});
+    } else {
+      try { new Notification(title, opts); } catch (e) {}
+    }
+  }
+
+  function tick() {
+    if (!settings.remind) return;
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var s = firedState();
+    var nums = [];
+    var times = [];
+    values.forEach(function (v, i) {
+      var diff = nowMin - toMin(v);
+      var key = i + "|" + v;
+      if (diff >= 0 && diff <= 2 && !s.keys[key]) {
+        s.keys[key] = 1;
+        nums.push(FIRST + i);
+        if (times.indexOf(v) === -1) times.push(v);
+      }
+    });
+    if (!nums.length) return;
+    writeJSON(FIRED_KEY, s);
+    showAlert(nums, times);
+    if (document.visibilityState !== "visible") systemNotify(nums, times);
+  }
+  setInterval(tick, 5000);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") tick(); });
+
+  refreshReminderUI();
+  tick();
+
+  /* ---------- Export to calendar (works when the app is closed) ---------- */
+  function buildICS() {
+    var d = new Date();
+    var day = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
+    var stamp = d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + "T" +
+      pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + "Z";
+    var out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Hours//HE", "CALSCALE:GREGORIAN", "X-WR-CALNAME:שעות"];
+    values.forEach(function (v, i) {
+      var n = String(FIRST + i);
+      out.push(
+        "BEGIN:VEVENT",
+        "UID:hours-" + n + "@hours.local",
+        "DTSTAMP:" + stamp,
+        "DTSTART:" + day + "T" + v.replace(":", "") + "00",
+        "DURATION:PT1M",
+        "RRULE:FREQ=DAILY",
+        "SUMMARY:" + n,
+        "DESCRIPTION:שעה " + v,
+        "BEGIN:VALARM",
+        "ACTION:DISPLAY",
+        "TRIGGER:PT0S",
+        "DESCRIPTION:" + n,
+        "END:VALARM",
+        "END:VEVENT"
+      );
+    });
+    out.push("END:VCALENDAR");
+    return out.join("\r\n") + "\r\n";
+  }
+
+  exportBtn.addEventListener("click", function () {
+    var text = buildICS();
+    var file;
+    try { file = new File([text], "hours.ics", { type: "text/calendar" }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "שעות" }).catch(function () {});
+      return;
+    }
+    var url = URL.createObjectURL(new Blob([text], { type: "text/calendar" }));
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "hours.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  });
+
+  /* ---------- Offline + notifications support ---------- */
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+</script>
+</body>
+</html>
